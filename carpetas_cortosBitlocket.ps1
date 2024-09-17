@@ -2,22 +2,27 @@
 $driveLetter = "C:"
 $sourceFolderPath = "C:\Users\gtrejo\Downloads\ANEXOS PRUEBA\Anexos"
 $destinationFolderPath = "C:\Users\gtrejo\Downloads\ANEXOS PRUEBA\cortos"
+$logFilePath = "C:\Users\gtrejo\Downloads\ANEXOS PRUEBA\resumen_archivos.txt"
 
-# Verificar si BitLocker est· habilitado en la unidad
+# Inicializar contadores
+$totalFilesOriginal = 0
+$totalFilesCopied = 0
+
+# Verificar si BitLocker est√° habilitado en la unidad
 $bitlockerStatus = Get-BitLockerVolume -MountPoint $driveLetter
 
 if ($bitlockerStatus.ProtectionStatus -eq "On") {
-    Write-Host "La unidad $driveLetter est· protegida por BitLocker."
+    Write-Host "La unidad $driveLetter est√° protegida por BitLocker."
 
-    # Verificar si la unidad est· desbloqueada
+    # Verificar si la unidad est√° desbloqueada
     if ($bitlockerStatus.LockStatus -eq "Locked") {
-        Write-Host "La unidad est· bloqueada. Intentando desbloquear..."
+        Write-Host "La unidad est√° bloqueada. Intentando desbloquear..."
 
-        # Intentar desbloquear la unidad. Debes proporcionar la clave de recuperaciÛn o contraseÒa.
-        $password = Read-Host -AsSecureString "Introduce la contraseÒa de BitLocker"
+        # Intentar desbloquear la unidad. Debes proporcionar la clave de recuperaci√≥n o contrase√±a.
+        $password = Read-Host -AsSecureString "Introduce la contrase√±a de BitLocker"
         Unlock-BitLocker -MountPoint $driveLetter -Password $password
 
-        # Verificar si se desbloqueÛ exitosamente
+        # Verificar si se desbloque√≥ exitosamente
         $bitlockerStatus = Get-BitLockerVolume -MountPoint $driveLetter
         if ($bitlockerStatus.LockStatus -eq "Unlocked") {
             Write-Host "Unidad desbloqueada exitosamente."
@@ -26,14 +31,11 @@ if ($bitlockerStatus.ProtectionStatus -eq "On") {
             exit
         }
     } else {
-        Write-Host "La unidad ya est· desbloqueada."
+        Write-Host "La unidad ya est√° desbloqueada."
     }
 } else {
-    Write-Host "La unidad no est· protegida por BitLocker."
+    Write-Host "La unidad no est√° protegida por BitLocker."
 }
-
-# A partir de aquÌ, puedes ejecutar tu script de copia
-# ...
 
 # Crear la carpeta de destino si no existe
 if (-not (Test-Path $destinationFolderPath)) {
@@ -42,6 +44,9 @@ if (-not (Test-Path $destinationFolderPath)) {
 
 # Obtener todos los archivos del directorio original y sus subdirectorios
 $files = Get-ChildItem -Path $sourceFolderPath -Recurse
+
+# Contar el total de archivos encontrados en la ruta original
+$totalFilesOriginal = $files.Count
 
 foreach ($file in $files) {
     $originalName = $file.BaseName
@@ -62,7 +67,7 @@ foreach ($file in $files) {
     # Si el archivo es PDF y tiene un nombre largo, acortarlo
     if ($extension -ieq ".pdf") {
         if ($originalName.Length -gt 70) {
-            # Acortar el nombre a los primeros 50 caracteres
+            # Acortar el nombre a los primeros 70 caracteres
             $newName = $originalName.Substring(0, 70) + $extension
         } else {
             # Mantener el nombre original
@@ -78,7 +83,7 @@ foreach ($file in $files) {
     # Verificar si ya existe un archivo con el mismo nombre en la carpeta de destino
     $duplicateCount = 1
     while (Test-Path $longDestinationPath) {
-        # Si existe un duplicado, agregar un sufijo numÈrico antes de la extensiÛn
+        # Si existe un duplicado, agregar un sufijo num√©rico antes de la extensi√≥n
         $newNameWithoutExtension = [System.IO.Path]::GetFileNameWithoutExtension($newName)
         $newName = "$newNameWithoutExtension($duplicateCount)$extension"
         $longDestinationPath = "\\?\$newDestinationFolder\$newName"
@@ -90,6 +95,9 @@ foreach ($file in $files) {
         try {
             Copy-Item -Path $longSourcePath -Destination $longDestinationPath
             Write-Host "Archivo copiado: $($file.FullName) a $longDestinationPath"
+            
+            # Incrementar el contador de archivos copiados
+            $totalFilesCopied++
         } catch {
             Write-Host "Error copiando $($file.FullName): $_"
         }
@@ -97,3 +105,16 @@ foreach ($file in $files) {
         Write-Host "Advertencia: No se encuentra el archivo $($file.FullName)"
     }
 }
+
+# Generar el archivo de log con el resumen
+$logContent = @"
+Resumen de la operaci√≥n:
+------------------------
+Total de archivos en la ruta original: $totalFilesOriginal
+Total de archivos copiados: $totalFilesCopied
+"@
+
+# Guardar el log en un archivo .txt
+Set-Content -Path $logFilePath -Value $logContent
+
+Write-Host "Resumen guardado en: $logFilePath"
